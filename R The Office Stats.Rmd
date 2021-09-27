@@ -1,0 +1,228 @@
+---
+title: "The Office Stats"
+author: "Paul Holley"
+date: "9/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Initially reading the file, and checking the first few lines
+```{r}
+setwd("~/")
+data <- read.csv("the_office_dialogue.csv",stringsAsFactors=FALSE)
+
+names(data)
+head(data$season)
+```
+
+I want to be able to konw how many lines a character has spoken in a season so I made a function for that.
+This function takes an input of a character's name and the specific season and returns the lines that character spoke that season
+
+```{r}
+get_number_lines1 <- function(character_name,season_number){
+  x <- tapply(data$season == season_number, data$character == character_name,sum)
+   return(x[2])
+}
+```
+
+
+Testing the function a few times
+```{r}
+get_number_lines1("Jim",1)
+get_number_lines1("Kelly",3)
+get_number_lines1("Angela",2)
+get_number_lines1("Dwight",1)
+```
+
+That function works, but I want to be able to know how many lines they spoke in all season at once so I made a modified version of the function. This function only takes one input, the name of a character, and returns a vector of how many lines they spoke in each season.
+```{r}
+get_number_lines2 <- function(character_name){
+  x <- tapply(data$character == character_name, data$season,sum)
+  return(x)
+}
+```
+
+Testing the new function
+```{r}
+names <- c("Dwight","Pam","Jim","Angela")
+sapply(names,get_number_lines2)
+```
+
+The third way I would like look at the amount of lines spoken is by each episode, first to do that I need to add a new column to the data that is formated x : n where x is the season and n is the episode. After I made added the column I modified get_number_lines2 to returna vector with lines from each episode.
+
+```{r}
+data$seasonEpisode <- paste(data$season, ":", data$episode)
+
+get_number_lines3 <- function(character_name){
+  x <- tapply(data$character == character_name, data$seasonEpisode,sum)
+  return(x)
+}
+```
+
+Testing the new function
+```{r}
+get_number_lines3("Jim")
+```
+
+The purpose of making these functions was to compare the amount of lines spoken and the rating for the season or episodes. For this I made a subset of the dataset where the seasons, ratings, and episodes are unique. I also make a vector of the season means that will be used later.
+```{r}
+imdb_data <- unique(data[,c('season', 'episode', 'imdb_rating','seasonEpisode')])
+
+season_mean <- tapply(imdb_data$imdb_rating,imdb_data$season,mean,na.rm = TRUE)
+```
+
+The first comparison I wanted to make was seeing if there was a correlation between the amount lines Dwight spoke and the average rating of the season. Here is the plot for that.
+```{r}
+plot(season_mean,get_number_lines2("Dwight"),
+     ylab = "#of Lines From Dwight",
+     xlab = "IMDB Episode rating",
+     main = "Dwight's Line Count and Ratings\n by Season")
+```
+With only 7 season there are not enough data points to get great data from this but I can at least look at the plot and say that there is not a positive correlation between the two.
+
+
+Next I wanted to compare Dwight's and Jim's line count for each episode. To do this I used get_number_lines3.
+```{r}
+plot(imdb_data$imdb_rating,get_number_lines3("Dwight"),
+     ylab = "#of Lines From Dwight",
+     xlab = "IMDB Episode rating",
+     col = "red",
+     pch = 1,
+     main = "Comparing Dwight and Jim"
+     )
+points(imdb_data$imdb_rating, get_number_lines3("Jim"),
+       col = "blue",
+       pch = 2)
+legend("bottomleft", legend = c("Dwight", "Jim"),
+       col = c("red", "blue"),
+       cex = 0.7,
+       horiz = TRUE,
+       pch = 1:2
+       )
+```
+
+This graph has too much going on for it to be easily readable so I had to compare this information in a different way. Since each episode got two points on this graph I wanted to only graph which character had more lines in the episode. To do this I made a new function that handles all of the graphing and just takes two character names as input.
+```{r}
+more_lines_finder <- function(name1, name2) {
+  #makes an empty plot to be filled in
+  plot(1, type="n",
+       xlab="IMDB Episode Rating",
+       ylab="# of Lines Spoken",
+       xlim=c(6.5, 10),
+       ylim=c(10, 100),
+       main = "How Who has More Lines\n Affects Episode Ratings")
+  #imdb data has unique entries for each episode so iterating through that allows me to add one point for each episode
+  for (x in imdb_data$seasonEpisode) {
+    #I make two subsets to compare them, each subset is the lines spoken by the given character in an episode.
+    temp_data1 <- subset(data, data$seasonEpisode == x & data$character == name1)
+    temp_data2 <- subset(data, data$seasonEpisode == x & data$character == name2)
+    
+    #I compare the lenghts of the subsets to see which one has more rows
+    if (dim(temp_data1)[1] > dim(temp_data2)[1]){
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data1)[1],
+                 pch = 1,
+                 col = "red")
+    } else if (dim(temp_data1)[1] == dim(temp_data2)[1]) {
+      #if both characters say the same amount of lines in an episode there is a different distiction for that
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data1)[1],
+                 pch = 3,
+                 col = "green")
+    } else {
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data2)[1],
+                 pch = 2,
+                 col = "blue")
+    }
+  }
+  #added a legend for ease of use 
+  legend("topleft", legend = c(name1, name2, "Both"),
+         col = c("red", "blue", "green"),
+         cex = 0.7,
+         horiz = FALSE,
+         pch = 1:3
+  )
+}
+```
+
+Here is the result of this new function with Dwight and Jim.
+
+```{r}
+more_lines_finder("Dwight", "Jim")
+```
+
+This data is still messy but, Dwight and Jim are two main charcters so they end up speaking many lines in most of the episodes. One comparison that stood out to me was comparing Michael and Jim in this same way.
+
+```{r}
+more_lines_finder("Michael", "Jim")
+```
+This comparison shows a lot more definitivly that when Michael speaks more than Jim the episodes have higher ratings.
+
+This was an interesting comparison to make so I made a nother function that does the opposite and only graphs who has spoken less lines in an episode. I was able to make this function by modifying more_lines_finder
+```{r}
+less_lines_finder <- function(name1, name2) {
+  #makes an empty plot to be filled in
+  plot(1, type="n",
+       xlab="IMDB Episode Rating",
+       ylab="# of Lines Spoken",
+       xlim=c(6.5, 10),
+       ylim=c(0, 90),
+       main = "How Who has Less Lines\n Affects Episode Ratings")
+  #imdb data has unique entries for each episode so iterating through that allows me to add one point for each episode
+  for (x in imdb_data$seasonEpisode) {
+    #I make two subsets to compare them, each subset is the lines spoken by the given character in an episode.
+    temp_data1 <- subset(data, data$seasonEpisode == x & data$character == name1)
+    temp_data2 <- subset(data, data$seasonEpisode == x & data$character == name2)
+    
+    #I compare the lenghts of the subsets to see which one has more rows
+    if (dim(temp_data1)[1] < dim(temp_data2)[1]){
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data1)[1],
+             pch = 1,
+             col = "red")
+    } else if (dim(temp_data1)[1] == dim(temp_data2)[1]) {
+      #if both characters say the same amount of lines in an episode there is a different distiction for that
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data1)[1],
+             pch = 3,
+             col = "green")
+    } else {
+      points(imdb_data$imdb_rating[which(imdb_data$seasonEpisode == x)],dim(temp_data2)[1],
+             pch = 2,
+             col = "blue")
+      
+    }
+  }
+  
+  #added a legend for ease fof use 
+  legend("topleft", legend = c(name1, name2, "Both"),
+         col = c("red", "blue", "green"),
+         cex = 0.7,
+         horiz = FALSE,
+         pch = 1:3
+  )
+}
+```
+
+Some interesting graphs with theses function
+```{r}
+less_lines_finder("Pam", "Jim")
+less_lines_finder("Andy", "Jim")
+```
+
+The last thing I wanted to look at with this data was the relationship between season ratings and how often "that's what she said" occurs. To do this I made a function that returns the number of time that was said in the season inputted.
+```{r}
+thats_what_she_said <- function(season_number){
+  dat <- subset(data,data$season == season_number)
+  length(grep("that's what she said", tolower(dat$text)))
+}
+```
+Translating the function into a plot
+```{r}
+seasons <- 1:9
+thats_what_count <- sapply(seasons,thats_what_she_said)
+plot(season_mean,thats_what_count,
+     ylab = "That's what she said count",
+     xlab = "Average Season Rating",
+     main = "'Thats what she said' and its effect\n on season rating")
+```
+
+It seems like the most simple way the office could of had more high rating season would of been if they just repeated "That's what she said as much as possible.
